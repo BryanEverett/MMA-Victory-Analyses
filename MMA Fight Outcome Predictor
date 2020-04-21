@@ -1,3 +1,10 @@
+"""
+
+
+
+"""
+
+
 import pandas as pd
 import numpy as np
 fights = pd.read_csv('raw_total_fight_data.csv',sep=';')
