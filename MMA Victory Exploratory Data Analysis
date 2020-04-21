@@ -1,0 +1,53 @@
+import pandas as pd
+import numpy as np
+fights = pd.read_csv('UFC_Fighter_Record_Database_WINS_ONLY')
+fights['Date'] = pd.to_datetime(fights['Date'])
+pd.DatetimeIndex(fights['Date']).year
+fights['Year'] = pd.DatetimeIndex(fights['Date']).year
+fights['Year'] = fights['Year'].apply(pd.to_numeric(downcast='integer')) 
+fights.head()
+fights.tail()
+fights.describe()
+fights.columns
+fights.index
+import plotly.express as px
+import plotly.graph_objects as go
+smbyyear = fights.groupby(['Year','MethodSummary','SpecificMethod']).MethodSummary.count()
+smbyyear = smbyyear.unstack(level = 1)
+smbyyear
+cdata = smbyyear.reset_index()
+cdata
+cdata = cdata.melt(['Year','SpecificMethod'],value_vars=['Decision','KO','Submission','Other'],value_name='Total',var_name='Method')
+cdata.dropna(inplace=True)
+cdata.sort_values(by=['Year'])
+methods = list(cdata.Method.unique())
+methods
+years = list(cdata.Year.unique())
+cdatasum = cdata.groupby(['Year','Method']).Total.sum().copy()
+cdatasum = cdatasum.unstack(level=1).reset_index()
+cdatasum = cdatasum.drop(['Other'],axis=1)
+cdatasum.rename_axis(None)
+# cdatasum = cdatasum.set_index('Year')
+cdatasum = cdatasum.set_index('Year')
+
+
+data = []
+for column in cdatasum.columns:
+    data.append(go.Bar(name=column, x=cdatasum.index, y=cdatasum[column])  )
+    
+fig = go.Figure(data=data)
+# Change the bar mode
+fig.update_layout(barmode='group')
+fig.show()
+
+data2 = []
+for column in subana.columns:
+    data2.append(go.Bar(name=column, x=subana.index, y=subana[column])  )
+    
+fig = go.Figure(data=data2)
+# Change the bar mode
+fig.update_layout(barmode='stack')
+fig.show()
+
+
+
