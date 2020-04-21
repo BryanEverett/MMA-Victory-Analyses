@@ -11,6 +11,7 @@ Specific skills I leveraged in this project:
  - Web scraping
  
 The project is broken into three parts:
+
   Part 1: Analyzing fight data scraped from Wikipedia
       In this section, I use pandas to pull a list of current UFC fighters. I then created a short script to scrape 
       each fighter's Wikipedia page to create a dataframe with all fighter's with Wikipedia pages MMA records. I then
