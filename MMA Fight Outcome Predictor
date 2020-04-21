@@ -1,0 +1,236 @@
+import pandas as pd
+import numpy as np
+fights = pd.read_csv('raw_total_fight_data.csv',sep=';')
+fightsum = pd.read_csv('data.csv')
+
+R = fightsum.R_fighter.unique()
+B = fightsum.B_fighter.unique()
+
+af = np.concatenate((R,B))
+af = np.unique(af)
+len(af)
+
+af = pd.DataFrame(af)
+af.columns = ['Name']
+af
+
+L = []
+for name in af.Name:
+    temp = fightsum.loc[(fights['R_fighter']==name) | (fights['B_fighter']==name)].reset_index().iloc[0]
+    next = temp.transpose()
+    next
+    L.append(next)
+    
+fighterstats = pd.DataFrame(L).reset_index().drop(['index','level_0'],axis=1)
+fighterstats['Name'] = af['Name'].copy()
+fighterstats.set_index('Name',drop=True,inplace=True)
+
+red = pd.DataFrame(columns=['Name','weight_class','R_avg_PASS','R_avg_REV','R_avg_KD','R_avg_SUB_ATT','R_avg_TD_att','R_avg_TD_landed','R_avg_TD_pct',
+'R_avg_SIG_STR_att','R_avg_SIG_STR_landed','R_avg_SIG_STR_pct','R_avg_TOTAL_STR_att','R_avg_TOTAL_STR_landed',
+'R_win_by_Decision_Majority','R_win_by_Decision_Split','R_win_by_Decision_Unanimous',
+'R_win_by_KO/TKO','R_win_by_Submission','R_win_by_TKO_Doctor_Stoppage'])
+
+blue = pd.DataFrame(columns=['Name','weight_class','B_avg_PASS','B_avg_REV','B_avg_KD','B_avg_SUB_ATT','B_avg_TD_att','B_avg_TD_landed','B_avg_TD_pct',
+'B_avg_SIG_STR_att','B_avg_SIG_STR_landed','B_avg_SIG_STR_pct','B_avg_TOTAL_STR_att','B_avg_TOTAL_STR_landed',
+'B_win_by_Decision_Majority','B_win_by_Decision_Split','B_win_by_Decision_Unanimous',
+'B_win_by_KO/TKO','B_win_by_Submission','B_win_by_TKO_Doctor_Stoppage'])
+
+red.set_index('Name',drop=True,inplace=True)
+blue.set_index('Name',drop=True,inplace=True)
+
+
+for i in fighterstats.index:
+    if fighterstats.loc[i].R_fighter == i:
+        red = pd.concat([red,fighterstats.loc[[i],['Name','weight_class','R_avg_PASS','R_avg_REV','R_avg_KD','R_avg_SUB_ATT','R_avg_TD_att','R_avg_TD_landed','R_avg_TD_pct',
+        'R_avg_SIG_STR_att','R_avg_SIG_STR_landed','R_avg_SIG_STR_pct','R_avg_TOTAL_STR_att','R_avg_TOTAL_STR_landed',
+        'R_win_by_Decision_Majority','R_win_by_Decision_Split','R_win_by_Decision_Unanimous',
+        'R_win_by_KO/TKO','R_win_by_Submission','R_win_by_TKO_Doctor_Stoppage']]])
+    elif fighterstats.loc[i].B_fighter == i:
+        blue = pd.concat([blue,fighterstats.loc[[i],['Name','weight_class','B_avg_PASS','B_avg_REV','B_avg_KD','B_avg_SUB_ATT','B_avg_TD_att','B_avg_TD_landed','B_avg_TD_pct',
+        'B_avg_SIG_STR_att','B_avg_SIG_STR_landed','B_avg_SIG_STR_pct','B_avg_TOTAL_STR_att','B_avg_TOTAL_STR_landed',
+        'B_win_by_Decision_Majority','B_win_by_Decision_Split','B_win_by_Decision_Unanimous',
+        'B_win_by_KO/TKO','B_win_by_Submission','B_win_by_TKO_Doctor_Stoppage']]])
+        
+red.drop('Name',axis=1,inplace=True)
+blue.drop('Name',axis=1,inplace=True)
+
+cols = ['avg_KD', 'avg_PASS', 'avg_REV', 'avg_SIG_STR_att',
+       'avg_SIG_STR_landed', 'avg_SIG_STR_pct', 'avg_SUB_ATT',
+       'avg_TD_att', 'avg_TD_landed', 'avg_TD_pct',
+       'avg_TOTAL_STR_att', 'avg_TOTAL_STR_landed',
+       'win_by_Decision_Majority', 'win_by_Decision_Split',
+       'win_by_Decision_Unanimous', 'win_by_KO/TKO', 'win_by_Submission',
+       'win_by_TKO_Doctor_Stoppage', 'weight_class']
+
+redcom = red.copy()
+bluecom = blue.copy()
+
+redcom.columns = cols
+bluecom.columns = cols
+
+allfs = pd.concat([redcom,bluecom])
+allfs = allfs.sort_index()
+allfs = allfs.dropna()
+
+allfs['Decisions'] = allfs[['win_by_Decision_Majority','win_by_Decision_Split','win_by_Decision_Unanimous']].sum(axis=1)
+allfs['KO/TKOs'] = allfs[['win_by_KO/TKO','win_by_TKO_Doctor_Stoppage']].sum(axis=1)
+allfs.drop(['win_by_Decision_Majority','win_by_Decision_Split','win_by_Decision_Unanimous','win_by_KO/TKO','win_by_TKO_Doctor_Stoppage'],axis=1,inplace=True)
+allfs['TOTAL_strike_pct'] = allfs['avg_TOTAL_STR_landed']/allfs['avg_TOTAL_STR_att']
+allfs.drop(['avg_SIG_STR_landed','avg_TD_landed','avg_TOTAL_STR_landed'],axis=1,inplace=True)
+allfs.drop('weight_class',axis=1,inplace=True)
+allfs.columns
+allfs.describe()
+multifights = allfs.copy()
+multifights['wins'] = multifights['win_by_Submission'] + multifights['Decisions'] + multifights['KO/TKOs']
+multifights = multifights.loc[multifights['wins'] >= 3]
+multifights.describe()
+
+import matplotlib.pyplot as plt
+X = multifights[['avg_KD', 'avg_PASS', 'avg_REV', 'avg_SIG_STR_att', 'avg_SIG_STR_pct',
+       'avg_SUB_ATT', 'avg_TD_att', 'avg_TD_pct', 'avg_TOTAL_STR_att',
+       'win_by_Submission', 'Decisions', 'KO/TKOs', 'TOTAL_strike_pct']].values
+
+from sklearn.cluster import KMeans
+wcss = []
+for i in range(1, 11):
+    kmeans = KMeans(n_clusters = i, init = 'k-means++', random_state = 42)
+    kmeans.fit(X)
+    wcss.append(kmeans.inertia_)
+plt.plot(range(1, 11), wcss)
+plt.title('The Elbow Method')
+plt.xlabel('Number of clusters')
+plt.ylabel('WCSS')
+plt.show()
+
+# # Fitting K-Means to the dataset
+kmeans = KMeans(n_clusters = 5, init = 'k-means++', random_state = 42)
+y_kmeans = kmeans.fit_predict(X)
+
+kmean = KMeans(n_clusters = 3, init = 'k-means++', random_state = 42)
+yy_kmeans = kmean.fit_predict(X)
+
+cats = pd.DataFrame(yy_kmeans,columns=['Category'])
+classed = multifights.reset_index()
+classed['Category'] = cats['Category']
+classed.set_index('Name',drop=True,inplace=True)
+
+namecat = classed['Category']
+namecat
+
+catana = fightsum.copy()
+catana = catana.loc[(catana['Winner'] == 'Blue') | (catana['Winner'] == 'Red')]
+catana = catana.merge(namecat,left_on='R_fighter',right_index=True)
+catana = catana.rename(columns={'Category': 'R_Category'})
+catana = catana.merge(namecat,left_on='B_fighter',right_index=True)
+catana = catana.rename(columns={'Category': 'B_Category'})
+catana['Outcome'] = ""
+catana.reset_index(drop=True,inplace=True)
+outcomes = []
+for i in catana.index:
+    if catana.iloc[i].Winner == 'Red':
+        outcomes.append(catana.loc[i].R_Category.astype(str) +' def '+ catana.loc[i].B_Category.astype(str))
+    elif catana.iloc[i].Winner == 'Blue':
+        outcomes.append(catana.loc[i].B_Category.astype(str) +' def '+ catana.loc[i].R_Category.astype(str))
+        
+results = pd.DataFrame(outcomes)
+results.columns = ['Results']
+results
+
+combined = pd.concat([catana,results],axis=1)
+combined = combined.rename(columns={'0': 'Results'})
+combined
+
+final_results = combined.Results.value_counts()
+final_results = pd.DataFrame(final_results).reset_index()
+final_results['Winner'] = final_results['index'].str.split(expand=True)[0]
+final_results['Loser'] = final_results['index'].str.split(expand=True)[2]
+final_results['Winner'] = final_results['Winner'].astype(int)
+final_results['Loser'] = final_results['Loser'].astype(int)
+final_results['Results'] = final_results['Results'].astype(int)
+ml = []
+for i in final_results.index:
+    if final_results.iloc[i].Winner == final_results.iloc[i].Loser:
+        ml.append(1)
+    else:
+        r = final_results.iloc[i].Results
+        o = final_results.loc[(final_results['Winner']==final_results.iloc[i].Loser)&
+        (final_results['Loser']==final_results.iloc[i].Winner)].Results
+        
+        pct = (r/(r+o))
+        
+        ml.append(pct)
+        
+        
+winpct = pd.DataFrame(ml)
+winpct.columns = ['winpct']
+
+winpct['winpct'] = winpct['winpct'].astype(float)
+finalwinpct = pd.concat([final_results,winpct],axis = 1)
+finalwinpct.sort_values(by='Winner')
+
+modelpct = finalwinpct.pivot(index='Winner',columns='Loser',values='winpct')
+matches = finalwinpct.loc[finalwinpct['Winner'] != finalwinpct['Loser']]
+matcheserror = matches.pivot(index='Winner',columns='Loser',values='winpct')
+
+
+
+#Real Results
+RecentResults = pd.read_csv('2019 - 2020 Fight Data - Sheet1.csv')
+RecentResults
+
+rr = RecentResults.copy()
+rr = rr.merge(namecat,left_on='Winner',right_index=True)
+rr = rr.rename(columns={'Category': 'W_Category'})
+rr = rr.merge(namecat,left_on='Loser',right_index=True)
+rr = rr.rename(columns={'Category': 'L_Category'})
+rr.reset_index(drop=True,inplace=True)
+routcomes = []
+for i in rr.index:
+    routcomes.append(rr.loc[i].W_Category.astype(str) +' def '+ rr.loc[i].L_Category.astype(str))
+
+rresults = pd.DataFrame(routcomes)
+rresults.columns=['Results']
+rcombined = pd.concat([rr,rresults],axis=1)
+rcombined.Results.value_counts()
+
+realresults = rcombined.Results.value_counts()
+realresults = pd.DataFrame(realresults).reset_index()
+realresults['Winner'] = realresults['index'].str.split(expand=True)[0]
+realresults['Loser'] = realresults['index'].str.split(expand=True)[2]
+realresults['Winner'] = realresults['Winner'].astype(int)
+realresults['Loser'] = realresults['Loser'].astype(int)
+realresults['Results'] = realresults['Results'].astype(int)
+
+rc = []
+for i in realresults.index:
+    if realresults.iloc[i].Winner == realresults.iloc[i].Loser:
+        rc.append(1)
+    else:
+        r = realresults.iloc[i].Results
+        o = realresults.loc[(realresults['Winner']==realresults.iloc[i].Loser)&
+        (realresults['Loser']==realresults.iloc[i].Winner)].Results
+        
+        pct = (r/(r+o))
+        
+        rc.append(pct)
+        
+rwinpct = pd.DataFrame(rc)
+rwinpct.columns = ['winpct']
+rwinpct['winpct'] = rwinpct['winpct'].astype(float)
+
+realwinpct = pd.concat([realresults,rwinpct],axis = 1)
+realwinpct = realwinpct.sort_values(by='Winner')
+realpct = realwinpct.pivot(index='Winner',columns='Loser',values='winpct')
+
+modelpct
+realpct
+
+modelerror = modelpct - realpct
+
+rmatches = realwinpct.loc[realwinpct['Winner'] != realwinpct['Loser']]
+rmatches
+
+rmatcheserror = rmatches.pivot(index='Winner',columns='Loser',values='winpct')
+finalerrormatrix = matcheserror - rmatcheserror
+finalerror = finalerrormatrix.abs().mean().mean()
+finalerror
