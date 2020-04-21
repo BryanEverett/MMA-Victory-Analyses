@@ -1,0 +1,175 @@
+import pandas as pd
+import numpy as np
+url = "https://en.wikipedia.org/wiki/List_of_current_UFC_fighters"
+
+names1 = pd.read_html(url)[0]['Name']
+names2 = pd.read_html(url)[1]['Name']
+names3 = pd.read_html(url)[2]['Name']
+names10 = pd.read_html(url)[9]['Name']
+names11= pd.read_html(url)[10]['Name']
+names12 = pd.read_html(url)[11]['Name']
+names13 = pd.read_html(url)[12]['Name']
+names14 = pd.read_html(url)[13]['Name']
+names15 = pd.read_html(url)[14]['Name']
+names16 = pd.read_html(url)[15]['Name']
+names17 = pd.read_html(url)[16]['Name']
+names18 = pd.read_html(url)[17]['Name']
+names19 = pd.read_html(url)[18]['Name']
+names20 = pd.read_html(url)[19]['Name']
+names21 = pd.read_html(url)[20]['Name']
+
+full_names = pd.concat([names1,names2,names3,names10,names11,names12,names13,names14,names15,names16,names17,names18,names19,names20,names21], axis=0,ignore_index=True)
+
+fn_cleaned1 = full_names.str.replace(' \('+'C'+'\)','').copy()
+fn_cleaned2 = fn_cleaned1.copy()
+fn_cleaned2 = fn_cleaned2.str.replace(' ' + '\*','')
+fn_cleaned3 = fn_cleaned2.copy()
+fn_cleaned3 = fn_cleaned3.str.replace(' ','_')
+
+
+for name in fn_cleaned3:
+    print (f"https://en.wikipedia.org/wiki/{name}#Mixed_martial_arts_record")
+    
+dataurl = 'https://en.wikipedia.org/wiki/'+ fn_cleaned3 + '#Mixed_martial_arts_record'
+
+
+database2 = pd.DataFrame(columns=['Name','Res.','Record','Opponent','Method','Event','Date','Round','Time','Location','Notes'])
+# database = database.append(pd.read_html(dataurl[1])[2])
+# database
+
+for i in dataurl.index:
+    try:
+        if (test.columns.equals(pd.read_html(dataurl[i])[2].columns)):
+            
+            temp = pd.read_html(dataurl[i])[2]
+            
+            oldlength = len(database2.index)
+            
+            database2 = database2.append(temp)
+            
+            newlength = len(database2.index)
+            
+            for k in range(newlength - oldlength):
+                database2['Name'].iloc[oldlength + k] = fn_cleaned2[i] 
+                
+        elif (test.columns.equals(pd.read_html(dataurl[i])[3].columns)):
+           
+            temp = pd.read_html(dataurl[i])[3]
+            
+            oldlength = len(database2.index)
+            
+            database2 = database2.append(temp)
+            
+            newlength = len(database2.index)
+            
+            for k in range(newlength - oldlength):
+                database2['Name'].iloc[oldlength + k] = fn_cleaned2[i]
+        else:
+            continue
+    except:
+        continue
+    else:
+        if (test.columns.equals(pd.read_html(dataurl[i])[2].columns)):
+            
+            temp = pd.read_html(dataurl[i])[2]
+            
+            oldlength = len(database2.index)
+            
+            database2 = database2.append(temp)
+            
+            newlength = len(database2.index)
+            
+            for k in range(newlength - oldlength):
+                database2['Name'].iloc[oldlength + k] = fn_cleaned2[i] 
+                
+        elif (test.columns.equals(pd.read_html(dataurl[i])[3].columns)):
+           
+            temp = pd.read_html(dataurl[i])[3]
+            
+            oldlength = len(database2.index)
+            
+            database2 = database2.append(temp)
+            
+            newlength = len(database2.index)
+            
+            for k in range(newlength - oldlength):
+                database2['Name'].iloc[oldlength + k] = fn_cleaned2[i]
+        else:
+            continue
+        
+database2 = database2.reset_index(drop=True)
+
+cleaned_db = database2.copy()
+cleaned_db.drop_duplicates(inplace=True)
+cleaned_db.reset_index(drop=True,inplace=True)
+cleaned_db
+cleaned_db['Method'].str.split(pat=' \(',n=1,expand=True)
+cleaned_db['MethodCategory'] = cleaned_db['Method'].str.split(pat=' \(',n=1,expand=True)[0]
+cleaned_db['SpecificMethod'] = cleaned_db['Method'].str.split(pat=' \(',n=1,expand=True)[1].str.replace(')','')
+cleaned_db = cleaned_db.dropna(how='any',subset=['Method'])
+
+def cleanedcats(cat): # Categorize all decision types into one of four categories: Decision, KO, Submission or Other
+    if 'Decision' in cat:
+        return 'Decision'
+    if 'KO' in cat or 'Ko' in cat:
+        return 'KO'
+    if 'Submission' in cat or 'submission' in cat:
+        return 'Submission'
+    else:
+        return 'Other'
+    
+# Apply category cleaning to every row of MethodSummary
+cleaned_db['MethodSummary'] = cleaned_db.apply(lambda x: cleanedcats(x['MethodCategory']),axis=1)
+
+cleaned_db.reset_index(drop=True,inplace=True)
+
+cleaned_db.loc[[4838],['Date']] = 'April 1, 2017'
+cleaned_db['Date'] = pd.to_datetime(cleaned_db['Date'])
+
+wins = cleaned_db.loc[cleaned_db['Res.']=='Win'].copy()
+
+Xinput = wins.copy()
+Xinput = wins.groupby(['Name','MethodSummary']).MethodSummary.count()
+Xinput.unstack(level = 1)
+Xinput = Xinput.unstack(level = -1).fillna(0)
+Xinput[['Decision','KO','Submission']]
+
+import matplotlib.pyplot as plt
+
+
+# Importing the dataset
+
+XX = Xinput[['Decision','KO','Submission']].values
+#y = dataset.iloc[:, 3].values
+
+
+# Using the elbow method to find the optimal number of clusters
+from sklearn.cluster import KMeans
+wc = []
+for i in range(1, 11):
+    kmean = KMeans(n_clusters = i, init = 'k-means++', random_state = 42)
+    kmean.fit(XX)
+    wc.append(kmean.inertia_)
+plt.plot(range(1, 11), wc)
+plt.title('The Elbow Method')
+plt.xlabel('Number of clusters')
+plt.ylabel('WCSS')
+plt.show()
+
+kmean = KMeans(n_clusters = 5, init = 'k-means++', random_state = 42)
+yy_kmeans = kmean.fit_predict(XX)
+
+cats = pd.DataFrame(yy_kmeans,columns=['Category'])
+
+Xfinal = Xinput[['Decision','KO','Submission']]
+Xfinal = Xfinal.reset_index()
+Xfinal.index.name = None
+
+Xfinal = pd.concat([Xfinal,cats],axis=1)
+Xfinal.set_index('Name')
+
+import plotly.express as px
+df = XX
+fig = px.scatter_3d(Xfinal, x='Decision', y='KO', z='Submission',
+              color='Category',range_x=[0,15],range_y=[0,15],range_z=[0,15])
+fig.show()
