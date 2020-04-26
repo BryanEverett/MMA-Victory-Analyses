@@ -3,51 +3,66 @@
 
 
 """
-
+"""Create an ML clustering model based on fight stats and victory type to group fighters, then determine if
+different groups of fighters have advantages over others."""
 
 import pandas as pd
 import numpy as np
+
+#Import two datasets downloaded from another person's analysis
 fights = pd.read_csv('raw_total_fight_data.csv',sep=';')
 fightsum = pd.read_csv('data.csv')
 
+#Dataset is organized by fight, with two fighters and their stats per fight; grabbed fighters from "Red" and "Blue" corners of each fight
 R = fightsum.R_fighter.unique()
 B = fightsum.B_fighter.unique()
 
+#Combine fighter names and remove duplicates
 af = np.concatenate((R,B))
 af = np.unique(af)
 len(af)
 
+#Create unique list of names as dataframe
 af = pd.DataFrame(af)
 af.columns = ['Name']
 af
 
+#fightsum is organized by fight in descending order by date. Code below creats a list of the most recent stats for each fighter
 L = []
 for name in af.Name:
+    #Find first instance of fighter's name appearing in data
     temp = fightsum.loc[(fights['R_fighter']==name) | (fights['B_fighter']==name)].reset_index().iloc[0]
+    #transpose data 
     next = temp.transpose()
-    next
     L.append(next)
-    
+
+#Create dataframe of the list generated from most recent fight for every fighter from loop above
 fighterstats = pd.DataFrame(L).reset_index().drop(['index','level_0'],axis=1)
+
+#Paste the name of the fighter we were looking for onto each row and make that name the index
 fighterstats['Name'] = af['Name'].copy()
 fighterstats.set_index('Name',drop=True,inplace=True)
 
+#Create temporary dataframe for fighters that were in the Red corner for their most recent fight
 red = pd.DataFrame(columns=['Name','weight_class','R_avg_PASS','R_avg_REV','R_avg_KD','R_avg_SUB_ATT','R_avg_TD_att','R_avg_TD_landed','R_avg_TD_pct',
 'R_avg_SIG_STR_att','R_avg_SIG_STR_landed','R_avg_SIG_STR_pct','R_avg_TOTAL_STR_att','R_avg_TOTAL_STR_landed',
 'R_win_by_Decision_Majority','R_win_by_Decision_Split','R_win_by_Decision_Unanimous',
 'R_win_by_KO/TKO','R_win_by_Submission','R_win_by_TKO_Doctor_Stoppage'])
 
+#Create temporary dataframe for fighters that were in the Blue corner for their most recent fight
 blue = pd.DataFrame(columns=['Name','weight_class','B_avg_PASS','B_avg_REV','B_avg_KD','B_avg_SUB_ATT','B_avg_TD_att','B_avg_TD_landed','B_avg_TD_pct',
 'B_avg_SIG_STR_att','B_avg_SIG_STR_landed','B_avg_SIG_STR_pct','B_avg_TOTAL_STR_att','B_avg_TOTAL_STR_landed',
 'B_win_by_Decision_Majority','B_win_by_Decision_Split','B_win_by_Decision_Unanimous',
 'B_win_by_KO/TKO','B_win_by_Submission','B_win_by_TKO_Doctor_Stoppage'])
 
+#Make name the index
 red.set_index('Name',drop=True,inplace=True)
 blue.set_index('Name',drop=True,inplace=True)
 
-
+#Loop through each fighter name and determine via IF statement if the fighter we were looking for was in the red or blue corner
 for i in fighterstats.index:
     if fighterstats.loc[i].R_fighter == i:
+#Paste data from appropriate corner into temporary dataframe for that corner
         red = pd.concat([red,fighterstats.loc[[i],['Name','weight_class','R_avg_PASS','R_avg_REV','R_avg_KD','R_avg_SUB_ATT','R_avg_TD_att','R_avg_TD_landed','R_avg_TD_pct',
         'R_avg_SIG_STR_att','R_avg_SIG_STR_landed','R_avg_SIG_STR_pct','R_avg_TOTAL_STR_att','R_avg_TOTAL_STR_landed',
         'R_win_by_Decision_Majority','R_win_by_Decision_Split','R_win_by_Decision_Unanimous',
@@ -57,10 +72,12 @@ for i in fighterstats.index:
         'B_avg_SIG_STR_att','B_avg_SIG_STR_landed','B_avg_SIG_STR_pct','B_avg_TOTAL_STR_att','B_avg_TOTAL_STR_landed',
         'B_win_by_Decision_Majority','B_win_by_Decision_Split','B_win_by_Decision_Unanimous',
         'B_win_by_KO/TKO','B_win_by_Submission','B_win_by_TKO_Doctor_Stoppage']]])
-        
+
+#Remove name index
 red.drop('Name',axis=1,inplace=True)
 blue.drop('Name',axis=1,inplace=True)
 
+#Rename red and blue temporary dataframe columns to drop the "R" or "B" designation so they can be concatenated
 cols = ['avg_KD', 'avg_PASS', 'avg_REV', 'avg_SIG_STR_att',
        'avg_SIG_STR_landed', 'avg_SIG_STR_pct', 'avg_SUB_ATT',
        'avg_TD_att', 'avg_TD_landed', 'avg_TD_pct',
@@ -75,28 +92,48 @@ bluecom = blue.copy()
 redcom.columns = cols
 bluecom.columns = cols
 
+#With identical columns now, combine red and blue dataframes
 allfs = pd.concat([redcom,bluecom])
 allfs = allfs.sort_index()
 allfs = allfs.dropna()
 
+#Combine decision wins into one column
 allfs['Decisions'] = allfs[['win_by_Decision_Majority','win_by_Decision_Split','win_by_Decision_Unanimous']].sum(axis=1)
+
+#Combine KOs/TKO wins into one column
 allfs['KO/TKOs'] = allfs[['win_by_KO/TKO','win_by_TKO_Doctor_Stoppage']].sum(axis=1)
+
+#Drop previously combined columns
 allfs.drop(['win_by_Decision_Majority','win_by_Decision_Split','win_by_Decision_Unanimous','win_by_KO/TKO','win_by_TKO_Doctor_Stoppage'],axis=1,inplace=True)
+
+#Calculate total strike accuracy, which was not included in original dataset
 allfs['TOTAL_strike_pct'] = allfs['avg_TOTAL_STR_landed']/allfs['avg_TOTAL_STR_att']
+
+#Will focus on attempts and accuracy for ML clustering
 allfs.drop(['avg_SIG_STR_landed','avg_TD_landed','avg_TOTAL_STR_landed'],axis=1,inplace=True)
+
+#Will not factor in weight class in actual clustering
 allfs.drop('weight_class',axis=1,inplace=True)
+
+#check out data a few more times
 allfs.columns
 allfs.describe()
+
+#Include only fighters with at least 3 wins on their record as of the capturing of this data
 multifights = allfs.copy()
 multifights['wins'] = multifights['win_by_Submission'] + multifights['Decisions'] + multifights['KO/TKOs']
 multifights = multifights.loc[multifights['wins'] >= 3]
 multifights.describe()
 
+#Applying K-Means clustering to final cleaned dataset with most recent stats for each fighters
 import matplotlib.pyplot as plt
+
+#Get parameters for clustering
 X = multifights[['avg_KD', 'avg_PASS', 'avg_REV', 'avg_SIG_STR_att', 'avg_SIG_STR_pct',
        'avg_SUB_ATT', 'avg_TD_att', 'avg_TD_pct', 'avg_TOTAL_STR_att',
        'win_by_Submission', 'Decisions', 'KO/TKOs', 'TOTAL_strike_pct']].values
 
+#Use elbow method to find optimal K number of clusters
 from sklearn.cluster import KMeans
 wcss = []
 for i in range(1, 11):
@@ -116,44 +153,60 @@ y_kmeans = kmeans.fit_predict(X)
 kmean = KMeans(n_clusters = 3, init = 'k-means++', random_state = 42)
 yy_kmeans = kmean.fit_predict(X)
 
+#Paste category of each fighter back onto dataframe with fighter's stats
 cats = pd.DataFrame(yy_kmeans,columns=['Category'])
 classed = multifights.reset_index()
 classed['Category'] = cats['Category']
 classed.set_index('Name',drop=True,inplace=True)
 
+#Get list of fighters by name and their category
 namecat = classed['Category']
 namecat
 
+###Find win/loss of categories against each other###
 catana = fightsum.copy()
+
+#Remove draws
 catana = catana.loc[(catana['Winner'] == 'Blue') | (catana['Winner'] == 'Red')]
+
+#Add categories of each fighter for Red and Blue corners into separate columns
 catana = catana.merge(namecat,left_on='R_fighter',right_index=True)
 catana = catana.rename(columns={'Category': 'R_Category'})
 catana = catana.merge(namecat,left_on='B_fighter',right_index=True)
 catana = catana.rename(columns={'Category': 'B_Category'})
+
+#Create a column combining the results of the fight in the form "X def Y", where X and Y are the categories of each fighter
 catana['Outcome'] = ""
 catana.reset_index(drop=True,inplace=True)
+
 outcomes = []
 for i in catana.index:
+#if statement to get the order of "X def Y" correct, then append to outcomes list
     if catana.iloc[i].Winner == 'Red':
         outcomes.append(catana.loc[i].R_Category.astype(str) +' def '+ catana.loc[i].B_Category.astype(str))
     elif catana.iloc[i].Winner == 'Blue':
         outcomes.append(catana.loc[i].B_Category.astype(str) +' def '+ catana.loc[i].R_Category.astype(str))
-        
+
+#Create results column
 results = pd.DataFrame(outcomes)
 results.columns = ['Results']
-results
 
+#Add results back into original dataframe
 combined = pd.concat([catana,results],axis=1)
 combined = combined.rename(columns={'0': 'Results'})
-combined
 
+#Create a table of wins for each type of fight, i.e. "1 def 2", "2 def 0", etc.
 final_results = combined.Results.value_counts()
 final_results = pd.DataFrame(final_results).reset_index()
+
+#Break out winners and losers into separate columns, with the number of occurances of each type of outcome
 final_results['Winner'] = final_results['index'].str.split(expand=True)[0]
 final_results['Loser'] = final_results['index'].str.split(expand=True)[2]
 final_results['Winner'] = final_results['Winner'].astype(int)
 final_results['Loser'] = final_results['Loser'].astype(int)
 final_results['Results'] = final_results['Results'].astype(int)
+
+#Calculate win percentage for each category vs. other categories
 ml = []
 for i in final_results.index:
     if final_results.iloc[i].Winner == final_results.iloc[i].Loser:
@@ -167,39 +220,45 @@ for i in final_results.index:
         
         ml.append(pct)
         
-        
+#Create dataframe of win percentages and number of results for each matchup       
 winpct = pd.DataFrame(ml)
 winpct.columns = ['winpct']
-
 winpct['winpct'] = winpct['winpct'].astype(float)
 finalwinpct = pd.concat([final_results,winpct],axis = 1)
 finalwinpct.sort_values(by='Winner')
 
+#Create pivot table of percentages for each matchup
 modelpct = finalwinpct.pivot(index='Winner',columns='Loser',values='winpct')
 matches = finalwinpct.loc[finalwinpct['Winner'] != finalwinpct['Loser']]
+
 matcheserror = matches.pivot(index='Winner',columns='Loser',values='winpct')
 
 
 
-#Real Results
+#Import pre-scraped data for rest of 2019 and 2020 (previous dataset ended in May 2019)
 RecentResults = pd.read_csv('2019 - 2020 Fight Data - Sheet1.csv')
 RecentResults
 
+#Categorize winner and lose for each fight outcome
 rr = RecentResults.copy()
 rr = rr.merge(namecat,left_on='Winner',right_index=True)
 rr = rr.rename(columns={'Category': 'W_Category'})
 rr = rr.merge(namecat,left_on='Loser',right_index=True)
 rr = rr.rename(columns={'Category': 'L_Category'})
 rr.reset_index(drop=True,inplace=True)
+
+#Create strong of "X def Y" for next set of results
 routcomes = []
 for i in rr.index:
     routcomes.append(rr.loc[i].W_Category.astype(str) +' def '+ rr.loc[i].L_Category.astype(str))
 
+#Create dataframe of outcomes for each fight
 rresults = pd.DataFrame(routcomes)
 rresults.columns=['Results']
 rcombined = pd.concat([rr,rresults],axis=1)
-rcombined.Results.value_counts()
 
+
+#Create summary of number of each type of outcome ("X vs Y"), then break out into separate columns for winner and lose
 realresults = rcombined.Results.value_counts()
 realresults = pd.DataFrame(realresults).reset_index()
 realresults['Winner'] = realresults['index'].str.split(expand=True)[0]
@@ -208,6 +267,7 @@ realresults['Winner'] = realresults['Winner'].astype(int)
 realresults['Loser'] = realresults['Loser'].astype(int)
 realresults['Results'] = realresults['Results'].astype(int)
 
+#Calculate win percentages for real outcomes
 rc = []
 for i in realresults.index:
     if realresults.iloc[i].Winner == realresults.iloc[i].Loser:
@@ -220,24 +280,32 @@ for i in realresults.index:
         pct = (r/(r+o))
         
         rc.append(pct)
-        
+
+#Create dataframe of win percentages and number of results for each matchup 
 rwinpct = pd.DataFrame(rc)
 rwinpct.columns = ['winpct']
 rwinpct['winpct'] = rwinpct['winpct'].astype(float)
 
+#Create pivot table of percentages for each matchup
 realwinpct = pd.concat([realresults,rwinpct],axis = 1)
 realwinpct = realwinpct.sort_values(by='Winner')
-realpct = realwinpct.pivot(index='Winner',columns='Loser',values='winpct')
 
-modelpct
-realpct
+#Need pivot table in this format to be able to subtract
+realpct = realwinpct.pivot(index='Winner',columns='Loser',values='winpct')
 
 modelerror = modelpct - realpct
 
 rmatches = realwinpct.loc[realwinpct['Winner'] != realwinpct['Loser']]
-rmatches
-
 rmatcheserror = rmatches.pivot(index='Winner',columns='Loser',values='winpct')
+
+#Final error - subtract expected percentages based on outcomes from fights up to June 2019 from outcomes from June 2019
+# onward to get the average difference in win rate between classes for each class matchup
+# This is the number to seek to optimize by changing the number of categories to group fighters into, the actual datarange
+# of fights included in the training and test data, and by eventually bringing in other data sets
+
+#Get difference in error for win percentage by class matchup up to June 2019 and June 2019 onward
 finalerrormatrix = matcheserror - rmatcheserror
+
+#Get the mean error for each matchup
 finalerror = finalerrormatrix.abs().mean().mean()
 finalerror
