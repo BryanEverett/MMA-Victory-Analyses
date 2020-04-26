@@ -1,10 +1,12 @@
-"""
-
-
-"""
-
 import pandas as pd
 import numpy as np
+
+
+"""
+Acquire names of active (and some inactive) fighters from wikipedia page linked to in "URL" using pd.read_HTML
+The Wikipedia page has many tables of current and recently deactivate fighters. Active fighters are broken out by weight class
+"""
+
 url = "https://en.wikipedia.org/wiki/List_of_current_UFC_fighters"
 
 names1 = pd.read_html(url)[0]['Name']
@@ -23,24 +25,38 @@ names19 = pd.read_html(url)[18]['Name']
 names20 = pd.read_html(url)[19]['Name']
 names21 = pd.read_html(url)[20]['Name']
 
+#Combine lists of names pulled from tables on fighter lists on Wikipedia page
 full_names = pd.concat([names1,names2,names3,names10,names11,names12,names13,names14,names15,names16,names17,names18,names19,names20,names21], axis=0,ignore_index=True)
 
+#Remove several non-name characters used in Wikipedia tables of fighter names
 fn_cleaned1 = full_names.str.replace(' \('+'C'+'\)','').copy()
 fn_cleaned2 = fn_cleaned1.copy()
 fn_cleaned2 = fn_cleaned2.str.replace(' ' + '\*','')
+
+#Add underscore to be able to paste into URL pattern
 fn_cleaned3 = fn_cleaned2.copy()
 fn_cleaned3 = fn_cleaned3.str.replace(' ','_')
 
-
+#Testing programmatic creation of links to fighter's wikipedia pages
 for name in fn_cleaned3:
     print (f"https://en.wikipedia.org/wiki/{name}#Mixed_martial_arts_record")
-    
+
+#Add URL pattern to each fighter name
 dataurl = 'https://en.wikipedia.org/wiki/'+ fn_cleaned3 + '#Mixed_martial_arts_record'
 
-
+#Create blank dataframe to paste fighter record tables into from each Wikipedia page looped through
 database2 = pd.DataFrame(columns=['Name','Res.','Record','Opponent','Method','Event','Date','Round','Time','Location','Notes'])
-# database = database.append(pd.read_html(dataurl[1])[2])
-# database
+
+#Create a blank dataframe to test that the MMA record table in Wikipedia is of the standard format of MMA record tables
+test = pd.DataFrame(columns=['Res.','Record','Opponent','Method','Event','Date','Round','Time','Location','Notes'])
+
+"""
+Loop through each URL for the fighter names acquired and add their MMA record table to the database2 dataframe
+created. Used try-except clauses to bypass MMA pages that don't exist or don't show up for various reasons. Then uses 
+an IF statement to check that the table that shows up is the correct table (MMA record table) to be appended to 
+database2 dataframe. If it is, the rest of the code acquires the data from that table in temp, adds it to database2,
+then writes the name of that fighter to the "Name" column in database2 (that columns does not exist on the Wiki pages).
+"""
 
 for i in dataurl.index:
     try:
@@ -101,19 +117,27 @@ for i in dataurl.index:
                 database2['Name'].iloc[oldlength + k] = fn_cleaned2[i]
         else:
             continue
-        
+
+#Reset index from start to finish
 database2 = database2.reset_index(drop=True)
 
+#Sometimes run multiple times to fix errors; remove any duplicates generated, reset index again
 cleaned_db = database2.copy()
 cleaned_db.drop_duplicates(inplace=True)
 cleaned_db.reset_index(drop=True,inplace=True)
-cleaned_db
+
+#Break out fight finish method by general and specific method (Submission vs. KO, and choke vs. ambar vs. TKO (knee), etc.)
 cleaned_db['Method'].str.split(pat=' \(',n=1,expand=True)
+
+#Clean up resulting columns and pull the data desired
 cleaned_db['MethodCategory'] = cleaned_db['Method'].str.split(pat=' \(',n=1,expand=True)[0]
 cleaned_db['SpecificMethod'] = cleaned_db['Method'].str.split(pat=' \(',n=1,expand=True)[1].str.replace(')','')
+
+#Remove a few NAs
 cleaned_db = cleaned_db.dropna(how='any',subset=['Method'])
 
-def cleanedcats(cat): # Categorize all decision types into one of four categories: Decision, KO, Submission or Other
+#Function to categorize the highest level win category into either "Decision", "KO", "Submission", or "Other"
+def cleanedcats(cat): 
     if 'Decision' in cat:
         return 'Decision'
     if 'KO' in cat or 'Ko' in cat:
@@ -123,34 +147,39 @@ def cleanedcats(cat): # Categorize all decision types into one of four categorie
     else:
         return 'Other'
     
-# Apply category cleaning to every row of MethodSummary
+# Apply category cleaning function to every row of MethodSummary
 cleaned_db['MethodSummary'] = cleaned_db.apply(lambda x: cleanedcats(x['MethodCategory']),axis=1)
 
 cleaned_db.reset_index(drop=True,inplace=True)
 
+#Several dates were mistyped; cleaned up by directly correcting to value suggested despite error
 cleaned_db.loc[[4838],['Date']] = 'April 1, 2017'
+
+#Convert dates of fights to datetime
 cleaned_db['Date'] = pd.to_datetime(cleaned_db['Date'])
 
+#Acquire wins only from full fight record database
 wins = cleaned_db.loc[cleaned_db['Res.']=='Win'].copy()
 
+#Group fighter's wins by Method summary to get a list of fighters by number of each type of win; effectively creating a pivot table
 Xinput = wins.copy()
 Xinput = wins.groupby(['Name','MethodSummary']).MethodSummary.count()
 Xinput.unstack(level = 1)
 Xinput = Xinput.unstack(level = -1).fillna(0)
 Xinput[['Decision','KO','Submission']]
 
-import matplotlib.pyplot as plt
-
-
-# Importing the dataset
+# Import pivot table of fight results per fighter and ignore "Other" category
 
 XX = Xinput[['Decision','KO','Submission']].values
 #y = dataset.iloc[:, 3].values
 
 
-# Using the elbow method to find the optimal number of clusters
+# Using the elbow method to find the optimal number of clusters; 4 - 6 clusters seemed to be the optimal values
+import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 wc = []
+
+#Loop through 1 - 11 clusters, applying KMeans, to determine how much differentiation each number of clusters produces
 for i in range(1, 11):
     kmean = KMeans(n_clusters = i, init = 'k-means++', random_state = 42)
     kmean.fit(XX)
@@ -161,18 +190,21 @@ plt.xlabel('Number of clusters')
 plt.ylabel('WCSS')
 plt.show()
 
+#Apply K-Means clustering with 5 clusters
 kmean = KMeans(n_clusters = 5, init = 'k-means++', random_state = 42)
 yy_kmeans = kmean.fit_predict(XX)
 
+#Create dataframe with categories for each fighter
 cats = pd.DataFrame(yy_kmeans,columns=['Category'])
 
+#Paste resulting K-Means categories back onto outcome types per fighter
 Xfinal = Xinput[['Decision','KO','Submission']]
 Xfinal = Xfinal.reset_index()
 Xfinal.index.name = None
-
 Xfinal = pd.concat([Xfinal,cats],axis=1)
 Xfinal.set_index('Name')
 
+#Create 3d scatter plot of fighters plotted by number of each submission type, and colored by category
 import plotly.express as px
 df = XX
 fig = px.scatter_3d(Xfinal, x='Decision', y='KO', z='Submission',
